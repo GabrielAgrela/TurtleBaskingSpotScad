@@ -8,22 +8,23 @@ platform_width = 150;       // Width of the basking platform (mm)
 platform_thickness = 5;    // Thickness of the platform (mm)
 
 // Wall dimensions
-wall_height = 40;          // Height of the back wall (mm)
+wall_height = 20;          // Height of the back wall (mm)
 wall_thickness = 5;        // Thickness of the wall (mm)
-upper_wall_height = 40;    // Height of the upper wall above the hook (mm)
+upper_wall_height = 50;    // Height of the upper wall above the hook (mm)
 
 // Glass hook dimensions
-hook_drop = 30;            // How far the hook drops down behind the glass (mm)
+hook_drop = 20;            // How far the hook drops down behind the glass (mm)
 hook_thickness = 5;        // Thickness of the hook (mm)
-glass_thickness = 6;       // Thickness of aquarium glass (mm)
+glass_thickness = 4;       // Thickness of aquarium glass (mm)
 
 // Ramp/stairs dimensions
 ramp_width = 100;           // Width of the ramp (mm)
-ramp_length = 50;         // Length of the ramp (mm)
-ramp_start_height = -80;   // Starting height of ramp (negative = below platform)
-use_stairs = true;         // true for stairs, false for smooth ramp
-step_count = 10;            // Number of steps (if using stairs)
-step_height = 10;           // Height of each step (mm)
+ramp_height = 85;         // Total depth of the ramp (how far down from platform) (mm)
+ramp_length = 100;        // Total length of the steps area (mm)
+
+// Ridge dimensions for better grip
+ridge_height = 2;          // Height of ridges above step surface (mm)
+ridge_width = 1;           // Width/thickness of each ridge (mm)
 
 // ===== MAIN ASSEMBLY =====
 turtle_basking_spot();
@@ -45,8 +46,14 @@ module turtle_basking_spot() {
 }
 
 module basking_platform() {
-    // Simple flat platform
-    cube([platform_length, platform_width, platform_thickness]);
+    union() {
+        // Simple flat platform
+        cube([platform_length, platform_width, platform_thickness]);
+        
+        // Add ridge at front edge for better grip
+        translate([0, 0, platform_thickness])
+            cube([platform_length, ridge_width, ridge_height]);
+    }
 }
 
 module back_wall_with_hook() {
@@ -78,44 +85,45 @@ module glass_hook() {
 }
 
 module ramp_stairs() {
-    total_height = platform_thickness - ramp_start_height;
+    // Calculate starting position - ramp goes down from platform level
+    ramp_start_height = -ramp_height;
+
+    // Calculate optimal step count and dimensions
+    calculated_step_count = max(1, round(ramp_height / 10));
+    actual_step_height = ramp_height / calculated_step_count;
+    actual_step_length = ramp_length / calculated_step_count;
     
-    if (use_stairs) {
-        // Create uniform rectangular steps at different heights
-        step_length = ramp_length / step_count;
-        // Calculate step positions so top step aligns with platform
-        available_height = total_height - step_height;
-        for (i = [0 : step_count - 1]) {
-            // Position steps so the top of the highest step is at platform level
-            step_z_position = ramp_start_height + (i * available_height / (step_count - 1));
-            translate([0, i * step_length, step_z_position])
-                cube([ramp_width, step_length, step_height]);
-        }
-    } else {
-        // Create steep smooth ramp using polyhedron
-        polyhedron(
-            points = [
-                // Bottom face at starting height
-                [0, 0, ramp_start_height],
-                [ramp_width, 0, ramp_start_height],
-                [ramp_width, ramp_length, ramp_start_height],
-                [0, ramp_length, ramp_start_height],
-                // Top face (front at start height, back at platform height)
-                [0, 0, ramp_start_height],
-                [ramp_width, 0, ramp_start_height],
-                [ramp_width, ramp_length, platform_thickness],
-                [0, ramp_length, platform_thickness]
-            ],
-            faces = [
-                [0, 1, 2, 3],  // Bottom
-                [4, 7, 6, 5],  // Top (sloped)
-                [0, 4, 5, 1],  // Front
-                [2, 6, 7, 3],  // Back
-                [0, 3, 7, 4],  // Left
-                [1, 5, 6, 2]   // Right
-            ]
-        );
+    // Create overlapping steps to prevent gaps
+    for (i = [0 : calculated_step_count - 1]) {
+        // Calculate step position
+        step_y_position = i * actual_step_length;
+        step_z_position = ramp_start_height + (i * actual_step_height);
+        
+        // Make each step extend to connect properly
+        step_length_with_overlap = (i == calculated_step_count - 1) ? 
+            ramp_length - step_y_position + 3 : actual_step_length + 3;
+        
+        translate([0, step_y_position, step_z_position])
+            ridged_step(ramp_width, step_length_with_overlap, actual_step_height);
     }
+
+}
+
+module ridged_step(width, length, height) {
+    union() {
+        // Base step
+        cube([width, length, height]);
+        
+        // Add ridges on top for better grip
+        translate([0, 0, height])
+            ridges_on_step(width, length);
+    }
+}
+
+module ridges_on_step(width, length) {
+    // Single ridge at the front edge of the step for better grip
+    translate([0, 0, 0])
+        cube([width, ridge_width, ridge_height]);
 }
 
 // ===== CUSTOMIZATION NOTES =====
@@ -125,13 +133,8 @@ module ramp_stairs() {
 // 3. Set upper_wall_height for the wall above the hook
 // 4. Adjust hook_drop for how far it extends behind the glass
 // 5. Set glass_thickness to match your aquarium glass thickness
-// 6. Configure ramp_width, ramp_length, and step settings for the ramp
-// 7. Set ramp_start_height (negative value) to control ramp steepness
-// 8. Set use_stairs to true for steps, false for smooth ramp
-// 9. All measurements are in millimeters
-
-// ===== PRINTING NOTES =====
-// - Print with the platform flat on the bed
-// - Use PLA or PETG for aquarium safety
-// - Consider adding supports for the hook overhang
-// - Post-process: sand smooth and ensure no sharp edges
+// 6. Configure ramp_width for the ramp width
+// 7. Set ramp_height to control how deep the ramp goes (distance down from platform)
+// 8. Set ramp_length for the total ramp length
+// 9. Adjust ridge_height and ridge_width for better grip on step edges
+// 10. All measurements are in millimeters
